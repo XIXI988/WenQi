@@ -1,0 +1,5 @@
+{
+  "name": "文栖 (Wen Qi)",
+  "description": "简约版Notion个人知识管理工具，支持块编辑、斜杠命令、树状层级及本地存储。",
+  "requestFramePermissions": []
+}
