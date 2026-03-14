@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useApp } from '../AppContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Smile, 
@@ -70,6 +71,7 @@ const CATEGORIES = [
 ];
 
 export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose, className, style }) => {
+  const { isDarkMode } = useApp();
   const [activeCategory, setActiveCategory] = useState('basic');
   const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -93,13 +95,17 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose, cla
       exit={{ opacity: 0, scale: 0.95, y: 10 }}
       style={style}
       className={cn(
-        "absolute z-50 bg-white border border-gray-200 rounded-xl shadow-xl w-72 overflow-hidden flex flex-col",
+        "absolute z-50 rounded-xl shadow-xl w-72 overflow-hidden flex flex-col transition-colors",
+        isDarkMode ? "bg-[#252525] border border-gray-700" : "bg-white border border-gray-200",
         className
       )}
       onClick={(e) => e.stopPropagation()}
     >
       {/* Header / Tabs */}
-      <div className="flex items-center border-b border-gray-100 p-1 bg-gray-50/50">
+      <div className={cn(
+        "flex items-center border-b p-1",
+        isDarkMode ? "border-gray-700 bg-[#2d2d2d]/50" : "border-gray-100 bg-gray-50/50"
+      )}>
         {CATEGORIES.map((category) => (
           <button
             key={category.id}
@@ -107,8 +113,8 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose, cla
             className={cn(
               "flex-1 flex flex-col items-center py-2 rounded-lg transition-all",
               activeCategory === category.id 
-                ? "bg-white text-blue-600 shadow-sm" 
-                : "text-gray-400 hover:text-gray-600 hover:bg-gray-100/50"
+                ? (isDarkMode ? "bg-gray-800 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm") 
+                : (isDarkMode ? "text-gray-500 hover:text-gray-300 hover:bg-gray-800/50" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100/50")
             )}
             title={category.name}
           >
@@ -118,7 +124,10 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose, cla
         ))}
         <button 
           onClick={onClose}
-          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg ml-1"
+          className={cn(
+            "p-2 rounded-lg ml-1 transition-colors",
+            isDarkMode ? "text-gray-500 hover:text-gray-300 hover:bg-gray-800" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+          )}
         >
           <X size={16} />
         </button>
@@ -133,7 +142,10 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose, cla
               onSelect(emoji);
               onClose();
             }}
-            className="text-2xl p-2 hover:bg-gray-100 rounded-lg transition-colors flex items-center justify-center"
+            className={cn(
+              "text-2xl p-2 rounded-lg transition-colors flex items-center justify-center",
+              isDarkMode ? "hover:bg-gray-800" : "hover:bg-gray-100"
+            )}
           >
             {emoji}
           </button>
@@ -141,8 +153,11 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose, cla
       </div>
 
       {/* Footer */}
-      <div className="px-3 py-2 border-t border-gray-100 bg-gray-50/30">
-        <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">
+      <div className={cn(
+        "px-3 py-2 border-t",
+        isDarkMode ? "border-gray-700 bg-[#2d2d2d]/30" : "border-gray-100 bg-gray-50/30"
+      )}>
+        <span className="text-xs text-gray-400 font-medium uppercase tracking-wider opacity-50">
           {currentCategory.name}
         </span>
       </div>

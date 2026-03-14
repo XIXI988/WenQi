@@ -38,6 +38,9 @@ export const serializePageToMarkdown = (page: Page, allPages: Record<string, Pag
       case 'quote':
         markdown += `> ${block.content}\n`;
         break;
+      case 'code':
+        markdown += `\`\`\`\n${block.content}\n\`\`\`\n`;
+        break;
       case 'divider':
         markdown += `---\n`;
         break;
@@ -87,6 +90,18 @@ export const parseMarkdownToBlocks = (markdown: string): { title: string; blocks
   for (let i = startIndex; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line || line.startsWith('<!--')) continue;
+
+    // Code block
+    if (line.startsWith('```')) {
+      let codeContent = '';
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith('```')) {
+        codeContent += lines[i] + '\n';
+        i++;
+      }
+      blocks.push(createBlock('code', codeContent.trim()));
+      continue;
+    }
 
     // Headers
     if (line.startsWith('###### ')) {

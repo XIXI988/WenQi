@@ -10,6 +10,14 @@ import { EmojiPicker } from './EmojiPicker';
 import { AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import Prism from 'prismjs';
+import 'prismjs/components/prism-javascript';
+import 'prismjs/components/prism-typescript';
+import 'prismjs/components/prism-css';
+import 'prismjs/components/prism-json';
+import 'prismjs/components/prism-markdown';
+import 'prismjs/components/prism-bash';
+import 'prismjs/components/prism-python';
 
 interface BlockItemProps {
   block: Block;
@@ -26,7 +34,8 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
     addPage, 
     data,
     focusedBlockId,
-    setFocusedBlockId
+    setFocusedBlockId,
+    isDarkMode
   } = useApp();
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -87,6 +96,9 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
       } else if (text.startsWith('1. ')) {
         updateBlock(pageId, block.id, { type: 'numbered_list', content: text.substring(3) });
         return;
+      } else if (text.startsWith('```')) {
+        updateBlock(pageId, block.id, { type: 'code', content: text.substring(3) });
+        return;
       } else if (text === '---') {
         updateBlock(pageId, block.id, { type: 'divider', content: '' });
         return;
@@ -128,7 +140,13 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
       // Navigate to new page
       setCurrentPageId(newPageId);
     } else {
-      updateBlock(pageId, block.id, { type, content: newContent });
+      const updates: Partial<Block> = { type, content: newContent };
+      if (type === 'todo') {
+        updates.properties = { checked: false };
+      } else if (type === 'table') {
+        updates.properties = { rows: [['', ''], ['', '']] };
+      }
+      updateBlock(pageId, block.id, updates);
       // Update the DOM directly to reflect the change immediately
       if (contentRef.current) {
         contentRef.current.innerText = newContent;
@@ -162,6 +180,8 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
   const handleClick = (e: React.MouseEvent) => {
     // If not already focused, focus it
     if (focusedBlockId !== block.id) {
+      // Store click coordinates to position the cursor correctly after element swap
+      (window as any)._lastClickPos = { x: e.clientX, y: e.clientY };
       setFocusedBlockId(block.id);
     }
   };
@@ -174,20 +194,59 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
 
   useEffect(() => {
     if (focusedBlockId === block.id && contentRef.current && !isFocused.current) {
-      // Explicitly clear if content is empty to prevent duplication from browser Enter key behavior
-      if (block.content === '') {
-        contentRef.current.innerText = '';
-      }
+      // Set the content when gaining focus to prevent text loss
+      contentRef.current.innerText = block.content;
+      
       contentRef.current.focus();
-      // Move cursor to end
-      const range = document.createRange();
+
+      const lastPos = (window as any)._lastClickPos;
       const selection = window.getSelection();
-      range.selectNodeContents(contentRef.current);
-      range.collapse(false);
-      selection?.removeAllRanges();
-      selection?.addRange(range);
+      
+      if (lastPos && selection) {
+        // Use requestAnimationFrame to ensure layout is stable
+        requestAnimationFrame(() => {
+          if (!contentRef.current) return;
+          
+          let range: Range | null = null;
+          
+          // Try to get range from click coordinates
+          if (document.caretRangeFromPoint) {
+            range = document.caretRangeFromPoint(lastPos.x, lastPos.y);
+          } else if ((document as any).caretPositionFromPoint) {
+            const pos = (document as any).caretPositionFromPoint(lastPos.x, lastPos.y);
+            if (pos) {
+              range = document.createRange();
+              range.setStart(pos.offsetNode, pos.offset);
+              range.collapse(true);
+            }
+          }
+
+          // If we found a valid range within our content, use it
+          if (range && contentRef.current.contains(range.commonAncestorContainer)) {
+            selection.removeAllRanges();
+            selection.addRange(range);
+          } else {
+            // Fallback: move to end if click was outside text or range finding failed
+            const fallbackRange = document.createRange();
+            fallbackRange.selectNodeContents(contentRef.current);
+            fallbackRange.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(fallbackRange);
+          }
+          
+          // Clean up
+          delete (window as any)._lastClickPos;
+        });
+      } else if (selection) {
+        // Programmatic focus (e.g., Enter key) - move to end
+        const range = document.createRange();
+        range.selectNodeContents(contentRef.current);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
     }
-  }, [focusedBlockId, block.id, block.content]);
+  }, [focusedBlockId, block.id, block.type]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -203,9 +262,31 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
     }
   };
 
+  const getControlTopClass = () => {
+    switch (block.type) {
+      case 'h1': return 'top-[12px]';
+      case 'h2': return 'top-[10px]';
+      case 'h3': return 'top-[6px]';
+      case 'h4': return 'top-[6px]';
+      case 'h5': return 'top-[6px]';
+      case 'h6': return 'top-[6px]';
+      case 'quote': return 'top-[6px]';
+      case 'code': return 'top-[10px]';
+      case 'image': return 'top-[10px]';
+      case 'table': return 'top-[10px]';
+      case 'divider': return 'top-[12px]';
+      case 'page': return 'top-[6px]';
+      case 'bulleted_list': return 'top-[6px]';
+      case 'numbered_list': return 'top-[6px]';
+      case 'todo': return 'top-[6px]';
+      default: return 'top-[4px]';
+    }
+  };
+
+  const controlTopClass = getControlTopClass();
+
   const renderContent = () => {
     const commonProps = {
-      key: block.id,
       ref: contentRef,
       contentEditable: true,
       onInput: handleInput,
@@ -213,61 +294,103 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
       onFocus: handleFocus,
       onBlur: handleBlur,
       suppressContentEditableWarning: true,
+      'data-placeholder': block.type === 'text' ? '输入 / 以获取命令...' : '',
     };
 
     const isEditing = focusedBlockId === block.id;
 
     const renderMarkdown = (content: string) => (
-      <div className="markdown-body pointer-events-none">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || ' '}</ReactMarkdown>
+      <div className="markdown-body pointer-events-none w-full">
+        <ReactMarkdown 
+          remarkPlugins={[remarkGfm]}
+          components={{
+            p: ({node, ...props}) => <span {...props} />,
+          }}
+        >
+          {content || ' '}
+        </ReactMarkdown>
       </div>
     );
 
     switch (block.type) {
       case 'h1':
         return isEditing ? (
-          <div {...commonProps} className="notion-input min-h-[1.5em] focus:outline-none text-3xl font-bold py-2" />
+          <div key={block.id} {...commonProps as any} className="notion-input min-h-[1.5em] focus:outline-none text-3xl font-bold py-2" />
         ) : (
-          <div className="text-3xl font-bold py-2 w-full">{renderMarkdown(`# ${block.content}`)}</div>
+          <div className="text-3xl font-bold py-2 w-full">{renderMarkdown(block.content)}</div>
         );
       case 'h2':
         return isEditing ? (
-          <div {...commonProps} className="notion-input min-h-[1.5em] focus:outline-none text-2xl font-bold py-2" />
+          <div key={block.id} {...commonProps as any} className="notion-input min-h-[1.5em] focus:outline-none text-2xl font-bold py-2" />
         ) : (
-          <div className="text-2xl font-bold py-2 w-full">{renderMarkdown(`## ${block.content}`)}</div>
+          <div className="text-2xl font-bold py-2 w-full">{renderMarkdown(block.content)}</div>
         );
       case 'h3':
         return isEditing ? (
-          <div {...commonProps} className="notion-input min-h-[1.5em] focus:outline-none text-xl font-bold py-1" />
+          <div key={block.id} {...commonProps as any} className="notion-input min-h-[1.5em] focus:outline-none text-xl font-bold py-1" />
         ) : (
-          <div className="text-xl font-bold py-1 w-full">{renderMarkdown(`### ${block.content}`)}</div>
+          <div className="text-xl font-bold py-1 w-full">{renderMarkdown(block.content)}</div>
         );
       case 'h4':
         return isEditing ? (
-          <div {...commonProps} className="notion-input min-h-[1.5em] focus:outline-none text-lg font-bold py-1" />
+          <div key={block.id} {...commonProps as any} className="notion-input min-h-[1.5em] focus:outline-none text-lg font-bold py-1" />
         ) : (
-          <div className="text-lg font-bold py-1 w-full">{renderMarkdown(`#### ${block.content}`)}</div>
+          <div className="text-lg font-bold py-1 w-full">{renderMarkdown(block.content)}</div>
         );
       case 'h5':
         return isEditing ? (
-          <div {...commonProps} className="notion-input min-h-[1.5em] focus:outline-none text-base font-bold py-1" />
+          <div key={block.id} {...commonProps as any} className="notion-input min-h-[1.5em] focus:outline-none text-base font-bold py-1" />
         ) : (
-          <div className="text-base font-bold py-1 w-full">{renderMarkdown(`##### ${block.content}`)}</div>
+          <div className="text-base font-bold py-1 w-full">{renderMarkdown(block.content)}</div>
         );
       case 'h6':
         return isEditing ? (
-          <div {...commonProps} className="notion-input min-h-[1.5em] focus:outline-none text-sm font-bold py-1" />
+          <div key={block.id} {...commonProps as any} className="notion-input min-h-[1.5em] focus:outline-none text-sm font-bold py-1" />
         ) : (
-          <div className="text-sm font-bold py-1 w-full">{renderMarkdown(`###### ${block.content}`)}</div>
+          <div className="text-sm font-bold py-1 w-full">{renderMarkdown(block.content)}</div>
         );
       case 'quote':
         return (
           <div className="flex items-stretch py-1 w-full">
-            <div className="w-1 bg-gray-300 mr-4 rounded-full" />
+            <div className={cn("w-1 mr-4 rounded-full", isDarkMode ? "bg-gray-700" : "bg-gray-300")} />
             {isEditing ? (
-              <div {...commonProps} className="notion-input min-h-[1.5em] focus:outline-none flex-1 italic text-gray-700" />
+              <div key={block.id} {...commonProps as any} className={cn("notion-input min-h-[1.5em] focus:outline-none flex-1 italic", isDarkMode ? "text-gray-400" : "text-gray-700")} />
             ) : (
-              <div className="flex-1 italic text-gray-700 w-full">{renderMarkdown(block.content)}</div>
+              <div className={cn("flex-1 italic w-full", isDarkMode ? "text-gray-400" : "text-gray-700")}>{renderMarkdown(block.content)}</div>
+            )}
+          </div>
+        );
+      case 'code':
+        return (
+          <div className="my-2 w-full">
+            {isEditing ? (
+              <div 
+                key={block.id} 
+                {...commonProps as any} 
+                className={cn(
+                  "font-mono text-sm p-4 rounded-lg border focus:outline-none w-full whitespace-pre-wrap transition-colors",
+                  isDarkMode ? "bg-[#2d2d2d] border-gray-700 text-gray-200" : "bg-gray-50 border-gray-200 text-gray-800"
+                )}
+                data-placeholder="在此输入代码..."
+              />
+            ) : (
+              <div className={cn(
+                "font-mono text-sm p-4 rounded-lg border w-full overflow-x-auto transition-colors",
+                isDarkMode ? "bg-[#2d2d2d] border-gray-700" : "bg-gray-50 border-gray-200"
+              )}>
+                <pre className="whitespace-pre-wrap">
+                  <code 
+                    className="language-javascript"
+                    dangerouslySetInnerHTML={{ 
+                      __html: Prism.highlight(
+                        block.content || '', 
+                        Prism.languages.javascript, 
+                        'javascript'
+                      ) 
+                    }} 
+                  />
+                </pre>
+              </div>
             )}
           </div>
         );
@@ -284,7 +407,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
                 />
                 {isEditing ? (
                   <div 
-                    className="mt-2 text-sm text-gray-500 italic focus:outline-none"
+                    className={cn("mt-2 text-sm italic focus:outline-none", isDarkMode ? "text-gray-500" : "text-gray-500")}
                     contentEditable
                     onInput={(e) => updateBlock(pageId, block.id, { properties: { ...block.properties, caption: e.currentTarget.innerText } })}
                     suppressContentEditableWarning
@@ -298,7 +421,10 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
                 )}
               </div>
             ) : (
-              <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg p-8 flex flex-col items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors cursor-pointer">
+              <div className={cn(
+                "border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center transition-colors cursor-pointer",
+                isDarkMode ? "bg-[#252525] border-gray-800 text-gray-600 hover:bg-gray-800" : "bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-100"
+              )}>
                 <ImageIcon size={32} className="mb-2" />
                 <p className="text-sm">点击上传图片或拖入图片</p>
                 <input 
@@ -314,9 +440,9 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
       case 'bulleted_list':
         return (
           <div className="flex items-start py-1 w-full">
-            <span className="mr-2 mt-1.5 w-1.5 h-1.5 rounded-full bg-gray-800 flex-shrink-0" />
+            <span className={cn("mr-2 mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0", isDarkMode ? "bg-gray-500" : "bg-gray-800")} />
             {isEditing ? (
-              <div {...commonProps} className="notion-input min-h-[1.5em] focus:outline-none flex-1" />
+              <div key={block.id} {...commonProps as any} className="notion-input min-h-[1.5em] focus:outline-none flex-1" />
             ) : (
               <div className="flex-1 w-full">{renderMarkdown(block.content)}</div>
             )}
@@ -327,7 +453,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
           <div className="flex items-start py-1 w-full">
             <span className="mr-2 text-gray-500 font-medium">{index + 1}.</span>
             {isEditing ? (
-              <div {...commonProps} className="notion-input min-h-[1.5em] focus:outline-none flex-1" />
+              <div key={block.id} {...commonProps as any} className="notion-input min-h-[1.5em] focus:outline-none flex-1" />
             ) : (
               <div className="flex-1 w-full">{renderMarkdown(block.content)}</div>
             )}
@@ -340,40 +466,46 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
               type="checkbox" 
               checked={block.properties?.checked} 
               onChange={(e) => updateBlock(pageId, block.id, { properties: { ...block.properties, checked: e.target.checked } })}
-              className="mr-3 mt-1.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              className={cn(
+                "mr-3 mt-1.5 w-4 h-4 rounded border transition-colors",
+                isDarkMode ? "bg-[#2d2d2d] border-gray-700 text-blue-500" : "border-gray-300 text-blue-600"
+              )}
             />
             {isEditing ? (
-              <div {...commonProps} className={cn("notion-input min-h-[1.5em] focus:outline-none flex-1", block.properties?.checked && "line-through text-gray-400")} />
+              <div key={block.id} {...commonProps as any} className={cn("notion-input min-h-[1.5em] focus:outline-none flex-1", block.properties?.checked && (isDarkMode ? "line-through text-gray-600" : "line-through text-gray-400"))} />
             ) : (
-              <div className={cn("flex-1 w-full", block.properties?.checked && "line-through text-gray-400")}>
+              <div className={cn("flex-1 w-full", block.properties?.checked && (isDarkMode ? "line-through text-gray-600" : "line-through text-gray-400"))}>
                 {renderMarkdown(block.content)}
               </div>
             )}
           </div>
         );
       case 'divider':
-        return <hr className="my-4 border-t border-gray-200" />;
+        return <hr className={cn("my-4 border-t transition-colors", isDarkMode ? "border-gray-800" : "border-gray-200")} />;
       case 'page':
         const targetPage = block.properties?.targetPageId ? data.pages[block.properties.targetPageId] : null;
         return (
           <div 
-            className="flex items-center p-2 notion-hover rounded-md cursor-pointer border border-transparent hover:border-gray-200"
+            className={cn(
+              "flex items-center p-2 notion-hover rounded-md cursor-pointer border border-transparent transition-colors",
+              isDarkMode ? "hover:border-gray-800" : "hover:border-gray-200"
+            )}
             onClick={() => targetPage && setCurrentPageId(targetPage.id)}
           >
             <span className="mr-2">{targetPage?.icon || '📄'}</span>
-            <span className="underline decoration-gray-300 underline-offset-4">{targetPage?.title || '无标题'}</span>
+            <span className={cn("underline underline-offset-4", isDarkMode ? "decoration-gray-700" : "decoration-gray-300")}>{targetPage?.title || '无标题'}</span>
           </div>
         );
       case 'table':
         const rows = block.properties?.rows || [['', ''], ['', '']];
         return (
           <div className="overflow-x-auto my-4">
-            <table className="min-w-full border-collapse border border-gray-200">
+            <table className={cn("min-w-full border-collapse border transition-colors", isDarkMode ? "border-gray-800" : "border-gray-200")}>
               <tbody>
                 {rows.map((row, rIdx) => (
                   <tr key={rIdx}>
                     {row.map((cell, cIdx) => (
-                      <td key={cIdx} className="border border-gray-200 p-2 min-w-[100px]">
+                      <td key={cIdx} className={cn("border p-2 min-w-[100px] transition-colors", isDarkMode ? "border-gray-800" : "border-gray-200")}>
                         <div 
                           className="notion-input min-h-[1.5em] focus:outline-none" 
                           contentEditable 
@@ -394,7 +526,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
             </table>
             <div className="flex space-x-2 mt-2">
               <button 
-                className="text-xs text-gray-400 notion-hover px-2 py-1 rounded"
+                className="text-xs opacity-40 notion-hover px-2 py-1 rounded transition-opacity"
                 onClick={() => {
                   const newRows = rows.map(r => [...r, '']);
                   updateBlock(pageId, block.id, { properties: { ...block.properties, rows: newRows } });
@@ -403,7 +535,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
                 + 添加列
               </button>
               <button 
-                className="text-xs text-gray-400 notion-hover px-2 py-1 rounded"
+                className="text-xs opacity-40 notion-hover px-2 py-1 rounded transition-opacity"
                 onClick={() => {
                   const newRows = [...rows, new Array(rows[0].length).fill('')];
                   updateBlock(pageId, block.id, { properties: { ...block.properties, rows: newRows } });
@@ -416,7 +548,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
         );
       default:
         return isEditing ? (
-          <div {...commonProps} className="notion-input min-h-[1.5em] focus:outline-none w-full" />
+          <div key={block.id} {...commonProps as any} className="notion-input min-h-[1.5em] focus:outline-none w-full" />
         ) : (
           <div className="min-h-[1.5em] w-full">{renderMarkdown(block.content)}</div>
         );
@@ -427,10 +559,10 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
     <div 
       ref={setNodeRef}
       style={style}
-      className="group relative flex items-start w-full mb-1"
+      className="group relative flex items-start w-full mb-1 cursor-text min-h-[1.5em]"
       onClick={handleClick}
     >
-      <div className="absolute -left-2 top-[2px] -translate-x-full flex items-center opacity-0 group-hover:opacity-100 transition-opacity pr-2">
+      <div className={cn("absolute -left-2 -translate-x-full flex items-center opacity-0 group-hover:opacity-100 transition-opacity pr-2", controlTopClass)}>
         <div 
           className="p-1 notion-hover rounded-sm text-gray-400 cursor-grab" 
           {...attributes} 
@@ -465,8 +597,11 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
       </div>
 
       <button 
-        className="absolute -right-8 top-[2px] p-1 notion-hover rounded-sm text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity"
-        onClick={() => deleteBlock(pageId, block.id)}
+        className={cn("absolute -right-8 p-1 notion-hover rounded-sm text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity", controlTopClass)}
+        onClick={(e) => {
+          e.stopPropagation();
+          deleteBlock(pageId, block.id);
+        }}
         title="删除此块"
       >
         <Trash2 size={16} />

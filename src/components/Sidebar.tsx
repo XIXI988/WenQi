@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../AppContext';
 import { Page } from '../types';
 import { 
@@ -11,10 +11,13 @@ import {
   Upload, 
   Trash2,
   Menu,
-  X
+  X,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../utils';
+import { SearchModal } from './SearchModal';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -31,9 +34,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
     exportData, 
     importData,
     searchQuery,
-    setSearchQuery
+    setSearchQuery,
+    isDarkMode,
+    toggleDarkMode
   } = useApp();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Open search on '/' if not in an input/editable
+      if (e.key === '/' && !isSearchOpen) {
+        const target = e.target as HTMLElement;
+        if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA' && !target.isContentEditable) {
+          e.preventDefault();
+          setIsSearchOpen(true);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSearchOpen]);
 
   const toggleExpand = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -70,19 +91,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
     const isExpanded = expanded[id];
     const isActive = currentPageId === id;
 
-    // Filter by search
-    if (searchQuery && !page.title.toLowerCase().includes(searchQuery.toLowerCase())) {
-      // If none of children match either, hide
-      const anyChildMatches = children.some(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()));
-      if (!anyChildMatches) return null;
-    }
-
     return (
       <div key={id} className="flex flex-col">
         <div 
           className={cn(
             "group flex items-center py-1 px-2 notion-hover cursor-pointer rounded-sm text-sm",
-            isActive && "bg-[#efefef] font-medium"
+            isActive && (isDarkMode ? "bg-[#2c2c2c] font-medium" : "bg-[#efefef] font-medium")
           )}
           style={{ paddingLeft: `${depth * 12 + 8}px` }}
           onClick={() => setCurrentPageId(id)}
@@ -153,38 +167,54 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
           width: isOpen ? 240 : 0
         }}
         className={cn(
-          "fixed md:relative z-50 h-full bg-[#fbfbfa] border-r border-[#e9e9e7] flex flex-col overflow-hidden",
+          "fixed md:relative z-50 h-full border-r flex flex-col overflow-hidden transition-colors duration-200",
+          isDarkMode ? "bg-[#191919] border-gray-800" : "bg-[#fbfbfa] border-[#e9e9e7]",
           !isOpen && "md:hidden"
         )}
       >
         {/* Sidebar Header */}
         <div className="p-4 flex items-center justify-between group">
           <div className="flex items-center space-x-2 font-semibold text-sm">
-            <div className="w-6 h-6 bg-[#37352f] rounded flex items-center justify-center text-white text-xs">文</div>
+            <div className={cn(
+              "w-6 h-6 rounded flex items-center justify-center text-white text-xs",
+              isDarkMode ? "bg-gray-700" : "bg-[#37352f]"
+            )}>文</div>
             <span>文栖</span>
           </div>
+          <div className="flex items-center space-x-1">
+            <button 
+              onClick={toggleDarkMode}
+              className="p-1 notion-hover rounded-sm transition-opacity"
+              title={isDarkMode ? "切换到白天模式" : "切换到黑夜模式"}
+            >
+              {isDarkMode ? <Sun size={14} className="text-yellow-400" /> : <Moon size={14} />}
+            </button>
+            <button 
+              onClick={() => setIsOpen(false)}
+              className="p-1 notion-hover rounded-sm transition-opacity"
+              title="收起侧边栏"
+            >
+              <ChevronRight className="rotate-180" size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Search Trigger */}
+        <div className="px-3 mb-4">
           <button 
-            onClick={() => setIsOpen(false)}
-            className="p-1 notion-hover rounded-sm opacity-0 group-hover:opacity-100 transition-opacity"
-            title="收起侧边栏"
+            onClick={() => setIsSearchOpen(true)}
+            className={cn(
+              "w-full flex items-center space-x-2 rounded-md py-1.5 px-3 text-sm transition-colors text-left",
+              isDarkMode ? "bg-[#2c2c2c] text-gray-400 hover:bg-[#353535]" : "bg-[#efefef] text-gray-500 hover:bg-[#e5e5e5]"
+            )}
           >
-            <ChevronRight className="rotate-180" size={16} />
+            <Search size={14} className="flex-shrink-0" />
+            <span className="flex-1 truncate">搜索标题或内容...</span>
+            <span className="text-[10px] opacity-50 border border-current px-1 rounded">/</span>
           </button>
         </div>
 
-        {/* Search */}
-        <div className="px-3 mb-4">
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
-            <input 
-              type="text" 
-              placeholder="搜索页面..."
-              className="w-full bg-[#efefef] rounded-md py-1.5 pl-8 pr-2 text-sm notion-input"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </div>
+        <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
 
         {/* Page List */}
         <div className="flex-1 overflow-y-auto px-1 py-2">
@@ -205,16 +235,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
         </div>
 
         {/* Sidebar Footer */}
-        <div className="p-2 border-t border-[#e9e9e7] space-y-1">
+        <div className={cn(
+          "p-2 border-t space-y-1 transition-colors",
+          isDarkMode ? "border-gray-800" : "border-[#e9e9e7]"
+        )}>
           <button 
             onClick={handleExport}
-            className="w-full flex items-center space-x-2 px-3 py-2 text-sm notion-hover rounded-md text-gray-600"
+            className="w-full flex items-center space-x-2 px-3 py-2 text-sm notion-hover rounded-md text-inherit opacity-70 hover:opacity-100"
             title="导出所有页面为 JSON 备份"
           >
             <Download size={16} />
             <span>导出 JSON 备份</span>
           </button>
-          <label className="w-full flex items-center space-x-2 px-3 py-2 text-sm notion-hover rounded-md text-gray-600 cursor-pointer" title="导入 JSON 备份文件">
+          <label className="w-full flex items-center space-x-2 px-3 py-2 text-sm notion-hover rounded-md text-inherit opacity-70 hover:opacity-100 cursor-pointer" title="导入 JSON 备份文件">
             <Upload size={16} />
             <span>导入 JSON 备份</span>
             <input type="file" className="hidden" accept=".json" onChange={handleImport} />

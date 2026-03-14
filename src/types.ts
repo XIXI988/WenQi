@@ -10,6 +10,7 @@ export type BlockType =
   | 'numbered_list' 
   | 'todo' 
   | 'quote'
+  | 'code'
   | 'image'
   | 'page' 
   | 'table' 

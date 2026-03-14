@@ -1,11 +1,196 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
+
+/* VS Code-like Syntax Highlighting */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: #6a9955;
+}
+
+.token.punctuation {
+  color: #393a34;
+}
+
+.token.namespace {
+  opacity: .7;
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol,
+.token.deleted {
+  color: #098658;
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted {
+  color: #a31515;
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  color: #393a34;
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: #0000ff;
+}
+
+.token.function,
+.token.class-name {
+  color: #795e26;
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+  color: #ee9900;
+}
+
+/* Dark Mode Overrides (VS Code Dark+ style) */
+.dark .token.comment,
+.dark .token.prolog,
+.dark .token.doctype,
+.dark .token.cdata {
+  color: #6a9955;
+}
+
+.dark .token.punctuation {
+  color: #d4d4d4;
+}
+
+.dark .token.property,
+.dark .token.tag,
+.dark .token.boolean,
+.dark .token.number,
+.dark .token.constant,
+.dark .token.symbol,
+.dark .token.deleted {
+  color: #b5cea8;
+}
+
+.dark .token.selector,
+.dark .token.attr-name,
+.dark .token.string,
+.dark .token.char,
+.dark .token.builtin,
+.dark .token.inserted {
+  color: #ce9178;
+}
+
+.dark .token.operator,
+.dark .token.entity,
+.dark .token.url,
+.dark .language-css .token.string,
+.dark .style .token.string {
+  color: #d4d4d4;
+}
+
+.dark .token.atrule,
+.dark .token.attr-value,
+.dark .token.keyword {
+  color: #569cd6;
+}
+
+.dark .token.function,
+.dark .token.class-name {
+  color: #dcdcaa;
+}
+
+.dark .token.regex,
+.dark .token.important,
+.dark .token.variable {
+  color: #9cdcfe;
+}
+
+.dark .token.type-parameter {
+  color: #4ec9b0;
+}
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+@layer base {
+  body {
+    @apply font-sans text-[#37352f] bg-white transition-colors duration-200 selection:bg-[#2383e2]/30;
+  }
+
+  .dark body {
+    @apply text-gray-200 bg-[#191919];
+  }
+}
+
+@layer components {
+  .notion-hover {
+    @apply hover:bg-[#efefef] transition-colors duration-100;
+  }
+
+  .dark .notion-hover {
+    @apply hover:bg-[#2c2c2c];
+  }
+
+  .notion-input {
+    @apply outline-none border-none bg-transparent w-full;
+  }
+
+  .notion-input:empty:before,
+  [data-placeholder]:empty:before {
+    content: attr(data-placeholder);
+    @apply text-gray-300 pointer-events-none;
+  }
+
+  .dark .notion-input:empty:before,
+  .dark [data-placeholder]:empty:before {
+    @apply text-gray-600;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d3d1cb;
+  border-radius: 10px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #3f3f3f;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #aeaca6;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #4f4f4f;
+}
+
+/* Markdown styles */
 .markdown-body {
-  @apply text-inherit;
+  @apply text-inherit bg-transparent;
 }
 
 .markdown-body p {
@@ -28,42 +213,10 @@
   @apply bg-gray-100 px-1 rounded font-mono text-sm;
 }
 
+.dark .markdown-body code {
+  @apply bg-[#2d2d2d] text-gray-300;
+}
+
 .markdown-body ul, .markdown-body ol {
   @apply list-none p-0 m-0;
 }
-
-@layer base {
-  body {
-    @apply bg-white text-[#37352f] selection:bg-[#2383e2]/30;
-  }
-}
-
-@layer components {
-  .notion-hover {
-    @apply hover:bg-[#efefef] transition-colors duration-100;
-  }
-  
-  .notion-input {
-    @apply outline-none border-none bg-transparent w-full;
-  }
-}
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #d3d1cb;
-  border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #aeaca6;
-}
-

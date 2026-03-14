@@ -19,6 +19,9 @@ interface AppContextType {
   setSearchQuery: (query: string) => void;
   focusedBlockId: string | null;
   setFocusedBlockId: (id: string | null) => void;
+  isDarkMode: boolean;
+  toggleDarkMode: () => void;
+  recentPageIds: string[];
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -43,6 +46,18 @@ const safeStorage = {
   }
 };
 
+const createInitialBlocks = (count: number) => {
+  const blocks: Block[] = [
+    { id: generateId(), type: 'h1', content: '开始你的记录' },
+    { id: generateId(), type: 'text', content: '这是一个简化版的 Notion 克隆。你可以点击这里开始编辑。' },
+    { id: generateId(), type: 'todo', content: '尝试输入 / 来添加新区块', properties: { checked: false } },
+  ];
+  for (let i = 0; i < count - 3; i++) {
+    blocks.push({ id: generateId(), type: 'text', content: '' });
+  }
+  return blocks;
+};
+
 const initialPageId = generateId();
 const DEFAULT_DATA: AppData = {
   pages: {
@@ -51,11 +66,7 @@ const DEFAULT_DATA: AppData = {
       title: '欢迎使用文栖',
       icon: '📝',
       parentId: null,
-      blocks: [
-        { id: generateId(), type: 'h1', content: '开始你的记录' },
-        { id: generateId(), type: 'text', content: '这是一个简化版的 Notion 克隆。你可以点击这里开始编辑。' },
-        { id: generateId(), type: 'todo', content: '尝试输入 / 来添加新区块', properties: { checked: false } },
-      ],
+      blocks: createInitialBlocks(10),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }
@@ -95,10 +106,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = safeStorage.getItem('wenqi_dark_mode');
+    return saved === 'true';
+  });
+  const [recentPageIds, setRecentPageIds] = useState<string[]>(() => {
+    const saved = safeStorage.getItem('wenqi_recent_pages');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   useEffect(() => {
     safeStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   }, [data]);
+
+  useEffect(() => {
+    safeStorage.setItem('wenqi_recent_pages', JSON.stringify(recentPageIds));
+  }, [recentPageIds]);
+
+  useEffect(() => {
+    safeStorage.setItem('wenqi_dark_mode', String(isDarkMode));
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
+  const handleSetCurrentPageId = useCallback((id: string | null) => {
+    setCurrentPageId(id);
+    if (id) {
+      setRecentPageIds(prev => {
+        const filtered = prev.filter(pid => pid !== id);
+        return [id, ...filtered].slice(0, 10);
+      });
+    }
+  }, []);
+
+  const toggleDarkMode = useCallback(() => {
+    setIsDarkMode(prev => !prev);
+  }, []);
 
   const addPage = useCallback((parentId: string | null, title: string = '无标题') => {
     const newId = generateId();
@@ -107,19 +153,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       title,
       icon: '📄',
       parentId,
-      blocks: [{ id: generateId(), type: 'text', content: '' }],
+      blocks: Array.from({ length: 10 }, () => ({ id: generateId(), type: 'text', content: '' })),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
 
-    setData(prev => ({
-      ...prev,
-      pages: {
+    setData(prev => {
+      const nextPages = {
         ...prev.pages,
         [newId]: newPage
-      },
-      rootPageIds: parentId ? prev.rootPageIds : [...prev.rootPageIds, newId]
-    }));
+      };
+
+      // If there's a parent, add a 'page' block to it
+      if (parentId && prev.pages[parentId]) {
+        const parentPage = prev.pages[parentId];
+        const newPageBlock: Block = {
+          id: generateId(),
+          type: 'page',
+          content: '',
+          properties: { targetPageId: newId }
+        };
+        nextPages[parentId] = {
+          ...parentPage,
+          blocks: [...parentPage.blocks, newPageBlock],
+          updatedAt: Date.now()
+        };
+      }
+
+      return {
+        ...prev,
+        pages: nextPages,
+        rootPageIds: parentId ? prev.rootPageIds : [...prev.rootPageIds, newId]
+      };
+    });
     return newId;
   }, []);
 
@@ -133,6 +199,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           [id]: { ...prev.pages[id], ...updates, updatedAt: Date.now() }
         }
       };
+    });
+    setRecentPageIds(prev => {
+      const filtered = prev.filter(pid => pid !== id);
+      return [id, ...filtered].slice(0, 10);
     });
   }, []);
 
@@ -187,6 +257,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       };
     });
+    setRecentPageIds(prev => {
+      const filtered = prev.filter(pid => pid !== pageId);
+      return [pageId, ...filtered].slice(0, 10);
+    });
   }, []);
 
   const addBlock = useCallback((pageId: string, type: BlockType, index?: number) => {
@@ -219,14 +293,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteBlock = useCallback((pageId: string, blockId: string) => {
     setData(prev => {
       const page = prev.pages[pageId];
-      if (!page || page.blocks.length <= 1) return prev;
-      const blocks = page.blocks.filter(b => b.id !== blockId);
+      if (!page) return prev;
+      
+      const blockToDelete = page.blocks.find(b => b.id === blockId);
+      const targetPageId = blockToDelete?.type === 'page' ? blockToDelete.properties?.targetPageId : null;
+
+      let newBlocks = page.blocks.filter(b => b.id !== blockId);
+      if (newBlocks.length === 0) {
+        newBlocks = [{ id: generateId(), type: 'text', content: '' }];
+      }
+
+      const nextPages = { ...prev.pages };
+      nextPages[pageId] = { ...page, blocks: newBlocks, updatedAt: Date.now() };
+
+      let nextRootPageIds = [...prev.rootPageIds];
+      
+      if (targetPageId && nextPages[targetPageId]) {
+        const toDelete = new Set<string>();
+        const findChildren = (pid: string) => {
+          toDelete.add(pid);
+          Object.values(nextPages).forEach((p: any) => {
+            if (p.parentId === pid) findChildren(p.id);
+          });
+        };
+        findChildren(targetPageId);
+        
+        toDelete.forEach(pid => {
+          delete nextPages[pid];
+        });
+        
+        nextRootPageIds = nextRootPageIds.filter(pid => !toDelete.has(pid));
+      }
+
       return {
         ...prev,
-        pages: {
-          ...prev.pages,
-          [pageId]: { ...page, blocks, updatedAt: Date.now() }
-        }
+        pages: nextPages,
+        rootPageIds: nextRootPageIds
       };
     });
   }, []);
@@ -266,9 +368,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <AppContext.Provider value={{
-      data, currentPageId, setCurrentPageId, addPage, updatePage, deletePage,
+      data, currentPageId, setCurrentPageId: handleSetCurrentPageId, addPage, updatePage, deletePage,
       updateBlock, addBlock, deleteBlock, moveBlock, importData, exportData,
-      searchQuery, setSearchQuery, focusedBlockId, setFocusedBlockId
+      searchQuery, setSearchQuery, focusedBlockId, setFocusedBlockId,
+      isDarkMode, toggleDarkMode, recentPageIds
     }}>
       {children}
     </AppContext.Provider>
