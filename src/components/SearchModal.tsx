@@ -185,7 +185,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => 
                         onClick={() => handleSelect(page.id)}
                       >
                         <span className="mr-3 text-lg">{page.icon}</span>
-                        <span className="flex-1 truncate">{page.title || '无标题'}</span>
+                        <span className="flex-1 truncate">{page.title}</span>
                         <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 text-gray-400 transition-opacity" />
                       </button>
                     ))}
@@ -207,7 +207,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => 
                         onClick={() => handleSelect(page.id)}
                       >
                         <span className="mr-3 text-lg">{page.icon}</span>
-                        <span className="truncate">{page.title || '无标题'}</span>
+                        <span className="truncate">{page.title}</span>
                       </button>
                       <button 
                         onClick={() => setScopePageId(page.id)}
@@ -239,7 +239,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => 
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center text-xs text-gray-400 mb-0.5">
-                        <span className="truncate">{data.pages[result.pageId]?.title || '无标题'}</span>
+                        <span className="truncate">{data.pages[result.pageId]?.title}</span>
                         {result.type === 'content' && <span className="mx-1">/</span>}
                         {result.type === 'content' && <span>正文内容</span>}
                       </div>

@@ -77,7 +77,7 @@ export const serializePageToMarkdown = (page: Page, allPages: Record<string, Pag
 
 export const parseMarkdownToBlocks = (markdown: string): { title: string; blocks: Block[] } => {
   const lines = markdown.split('\n');
-  let title = '无标题';
+  let title = '';
   const blocks: Block[] = [];
 
   // Check if first line is H1 title

@@ -6,7 +6,7 @@ interface AppContextType {
   data: AppData;
   currentPageId: string | null;
   setCurrentPageId: (id: string | null) => void;
-  addPage: (parentId: string | null, title?: string) => string;
+  addPage: (parentId: string | null, title?: string, shouldAddBlock?: boolean) => string;
   updatePage: (id: string, updates: Partial<Page>) => void;
   deletePage: (id: string) => void;
   updateBlock: (pageId: string, blockId: string, updates: Partial<Block>) => void;
@@ -22,6 +22,7 @@ interface AppContextType {
   isDarkMode: boolean;
   toggleDarkMode: () => void;
   recentPageIds: string[];
+  undo: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -49,7 +50,7 @@ const safeStorage = {
 const createInitialBlocks = (count: number) => {
   const blocks: Block[] = [
     { id: generateId(), type: 'h1', content: '开始你的记录' },
-    { id: generateId(), type: 'text', content: '这是一个简化版的 Notion 克隆。你可以点击这里开始编辑。' },
+    { id: generateId(), type: 'text', content: '这里是属于你的专属空间，所有文字、想法、页面都由你自由记录、组合。' },
     { id: generateId(), type: 'todo', content: '尝试输入 / 来添加新区块', properties: { checked: false } },
   ];
   for (let i = 0; i < count - 3; i++) {
@@ -114,6 +115,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = safeStorage.getItem('wenqi_recent_pages');
     return saved ? JSON.parse(saved) : [];
   });
+  const [history, setHistory] = useState<AppData[]>([]);
+  const lastPushTime = React.useRef<number>(0);
 
   useEffect(() => {
     safeStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -146,7 +149,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsDarkMode(prev => !prev);
   }, []);
 
-  const addPage = useCallback((parentId: string | null, title: string = '无标题') => {
+  const pushToHistory = useCallback(() => {
+    const now = Date.now();
+    // Only push if it's been more than 10 seconds since the last push
+    if (now - lastPushTime.current > 10000) {
+      setHistory(prev => {
+        const newHistory = [...prev, data];
+        if (newHistory.length > 50) return newHistory.slice(newHistory.length - 50);
+        return newHistory;
+      });
+      lastPushTime.current = now;
+    }
+  }, [data]);
+
+  const undo = useCallback(() => {
+    setHistory(prev => {
+      if (prev.length === 0) return prev;
+      const prevState = prev[prev.length - 1];
+      setData(prevState);
+      // Reset push time so the next change after undo is recorded immediately
+      lastPushTime.current = 0;
+      return prev.slice(0, -1);
+    });
+  }, []);
+
+  const addPage = useCallback((parentId: string | null, title: string = '无标题', shouldAddBlock: boolean = true) => {
+    pushToHistory();
     const newId = generateId();
     const newPage: Page = {
       id: newId,
@@ -164,8 +192,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         [newId]: newPage
       };
 
-      // If there's a parent, add a 'page' block to it
-      if (parentId && prev.pages[parentId]) {
+      // If there's a parent and shouldAddBlock is true, add a 'page' block to it
+      if (parentId && prev.pages[parentId] && shouldAddBlock) {
         const parentPage = prev.pages[parentId];
         const newPageBlock: Block = {
           id: generateId(),
@@ -190,6 +218,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const updatePage = useCallback((id: string, updates: Partial<Page>) => {
+    pushToHistory();
     setData(prev => {
       if (!prev.pages[id]) return prev;
       return {
@@ -207,6 +236,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const deletePage = useCallback((id: string) => {
+    pushToHistory();
     let nextId: string | null = null;
     
     setData(prev => {
@@ -245,6 +275,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [currentPageId]);
 
   const updateBlock = useCallback((pageId: string, blockId: string, updates: Partial<Block>) => {
+    // Only push to history if it's a significant change or after a short delay
+    // For simplicity, we push on every update here, but we could throttle it
+    pushToHistory();
     setData(prev => {
       const page = prev.pages[pageId];
       if (!page) return prev;
@@ -264,6 +297,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const addBlock = useCallback((pageId: string, type: BlockType, index?: number) => {
+    pushToHistory();
     const newBlockId = generateId();
     const newBlock: Block = { id: newBlockId, type, content: '' };
     if (type === 'table') {
@@ -291,6 +325,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const deleteBlock = useCallback((pageId: string, blockId: string) => {
+    pushToHistory();
     setData(prev => {
       const page = prev.pages[pageId];
       if (!page) return prev;
@@ -334,6 +369,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const moveBlock = useCallback((pageId: string, fromIndex: number, toIndex: number) => {
+    pushToHistory();
     setData(prev => {
       const page = prev.pages[pageId];
       if (!page) return prev;
@@ -371,7 +407,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       data, currentPageId, setCurrentPageId: handleSetCurrentPageId, addPage, updatePage, deletePage,
       updateBlock, addBlock, deleteBlock, moveBlock, importData, exportData,
       searchQuery, setSearchQuery, focusedBlockId, setFocusedBlockId,
-      isDarkMode, toggleDarkMode, recentPageIds
+      isDarkMode, toggleDarkMode, recentPageIds, undo
     }}>
       {children}
     </AppContext.Provider>

@@ -144,7 +144,7 @@ export const Editor: React.FC<EditorProps> = ({ isSidebarOpen = true }) => {
                 className="notion-hover px-1.5 py-0.5 rounded-sm truncate max-w-[150px]"
                 onClick={() => setCurrentPageId(crumb.id)}
               >
-                {crumb.icon} {crumb.title || '无标题'}
+                {crumb.icon} {crumb.title}
               </button>
             </React.Fragment>
           ))}

@@ -17,7 +17,8 @@ import {
   Minus,
   Quote,
   Code,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Link as LinkIcon
 } from 'lucide-react';
 
 import { cn } from '../utils';
@@ -42,6 +43,7 @@ const COMMANDS: { type: BlockType; label: string; icon: React.ReactNode; descrip
   { type: 'code', label: '代码块', icon: <Code size={16} />, description: '带有语法高亮的代码块' },
   { type: 'quote', label: '引用', icon: <Quote size={16} />, description: '引用一段文字' },
   { type: 'image', label: '图片', icon: <ImageIcon size={16} />, description: '上传或嵌入图片' },
+  { type: 'link', label: '链接', icon: <LinkIcon size={16} />, description: '插入 Markdown 格式的链接' },
   { type: 'page', label: '子页面', icon: <FilePlus size={16} />, description: '在当前页面内创建子页面' },
   { type: 'table', label: '表格', icon: <Table size={16} />, description: '简单的二维数据表' },
   { type: 'divider', label: '分隔线', icon: <Minus size={16} />, description: '视觉上的分隔线' },

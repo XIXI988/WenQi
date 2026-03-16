@@ -9,7 +9,21 @@ import { cn } from './utils';
 function MainLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
   const { toasts, showToast } = useToast();
-  const { currentPageId, isDarkMode, toggleDarkMode } = useApp();
+  const { currentPageId, isDarkMode, toggleDarkMode, undo } = useApp();
+
+  // Global shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        // Only undo if not in an input that handles its own undo
+        // But for this app, we want to undo our global state
+        e.preventDefault();
+        undo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo]);
 
   // Listen for window resize to handle sidebar
   useEffect(() => {

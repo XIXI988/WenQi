@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../AppContext';
 import { Block, BlockType } from '../types';
-import { GripVertical, Trash2, Plus, ChevronRight, ChevronDown, Smile, Image as ImageIcon, Quote as QuoteIcon } from 'lucide-react';
+import { GripVertical, Trash2, Plus, ChevronRight, ChevronDown, Smile, Image as ImageIcon, Quote as QuoteIcon, Copy, Check } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '../utils';
@@ -39,6 +39,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
   } = useApp();
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const contentRef = useRef<HTMLDivElement>(null);
   const isFocused = useRef(false);
@@ -118,6 +119,10 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey && !showSlashMenu) {
+      if (block.type === 'code') {
+        // In code blocks, Enter should just add a newline
+        return;
+      }
       e.preventDefault();
       addBlock(pageId, 'text', index);
     } else if (e.key === 'Backspace' && block.content === '' && data.pages[pageId].blocks.length > 1) {
@@ -131,14 +136,18 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
     const newContent = block.content.replace(/\/$/, '');
     
     if (type === 'page') {
-      const newPageId = addPage(pageId);
+      const newPageId = addPage(pageId, '无标题', false);
       updateBlock(pageId, block.id, { 
         type: 'page', 
         content: '', 
         properties: { targetPageId: newPageId } 
       });
-      // Navigate to new page
-      setCurrentPageId(newPageId);
+    } else if (type === 'link') {
+      const linkContent = '[链接文本](https://example.com)';
+      updateBlock(pageId, block.id, { type: 'text', content: linkContent });
+      if (contentRef.current) {
+        contentRef.current.innerText = linkContent;
+      }
     } else {
       const updates: Partial<Block> = { type, content: newContent };
       if (type === 'todo') {
@@ -171,13 +180,50 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
   const handleFocus = () => {
     isFocused.current = true;
     setFocusedBlockId(block.id);
+    // Ensure content is set when focusing, especially when transitioning from non-editing state
+    if (contentRef.current && contentRef.current.innerText !== block.content) {
+      contentRef.current.innerText = block.content;
+    }
   };
 
   const handleBlur = () => {
     isFocused.current = false;
   };
 
-  const handleClick = (e: React.MouseEvent) => {
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Check for Ctrl+Click on links
+    if ((e.ctrlKey || e.metaKey)) {
+      let range: Range | null = null;
+      if (document.caretRangeFromPoint) {
+        range = document.caretRangeFromPoint(e.clientX, e.clientY);
+      } else if ((document as any).caretPositionFromPoint) {
+        const pos = (document as any).caretPositionFromPoint(e.clientX, e.clientY);
+        if (pos) {
+          range = document.createRange();
+          range.setStart(pos.offsetNode, pos.offset);
+          range.collapse(true);
+        }
+      }
+      
+      if (range && range.startContainer.nodeType === Node.TEXT_NODE) {
+        const textNode = range.startContainer;
+        const offset = range.startOffset;
+        const text = textNode.textContent || "";
+        
+        // Find the boundaries of the word containing the offset
+        let start = offset;
+        while (start > 0 && !/\s/.test(text[start - 1])) start--;
+        let end = offset;
+        while (end < text.length && !/\s/.test(text[end])) end++;
+        
+        const word = text.substring(start, end);
+        if (word.startsWith('http://') || word.startsWith('https://')) {
+          window.open(word, '_blank');
+          return;
+        }
+      }
+    }
+
     // If not already focused, focus it
     if (focusedBlockId !== block.id) {
       // Store click coordinates to position the cursor correctly after element swap
@@ -193,11 +239,17 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
   }, [block.content, block.type]);
 
   useEffect(() => {
-    if (focusedBlockId === block.id && contentRef.current && !isFocused.current) {
+    if (focusedBlockId === block.id && contentRef.current) {
       // Set the content when gaining focus to prevent text loss
-      contentRef.current.innerText = block.content;
+      // We do this even if isFocused is true if the innerText is empty, 
+      // which handles the mount transition
+      if (contentRef.current.innerText !== block.content && (!isFocused.current || contentRef.current.innerText === '')) {
+        contentRef.current.innerText = block.content;
+      }
       
-      contentRef.current.focus();
+      if (!isFocused.current) {
+        contentRef.current.focus();
+      }
 
       const lastPos = (window as any)._lastClickPos;
       const selection = window.getSelection();
@@ -285,6 +337,13 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
 
   const controlTopClass = getControlTopClass();
 
+  const handleCopyCode = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(block.content || '');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const renderContent = () => {
     const commonProps = {
       ref: contentRef,
@@ -362,7 +421,17 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
         );
       case 'code':
         return (
-          <div className="my-2 w-full">
+          <div className="my-2 w-full group/code relative">
+            <button
+              onClick={handleCopyCode}
+              className={cn(
+                "absolute right-2 top-2 p-1.5 rounded-md opacity-0 group-hover/code:opacity-100 transition-all z-10",
+                isDarkMode ? "bg-gray-800 hover:bg-gray-700 text-gray-400" : "bg-white hover:bg-gray-100 text-gray-500 border border-gray-200 shadow-sm"
+              )}
+              title="复制代码"
+            >
+              {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+            </button>
             {isEditing ? (
               <div 
                 key={block.id} 
@@ -493,7 +562,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
             onClick={() => targetPage && setCurrentPageId(targetPage.id)}
           >
             <span className="mr-2">{targetPage?.icon || '📄'}</span>
-            <span className={cn("underline underline-offset-4", isDarkMode ? "decoration-gray-700" : "decoration-gray-300")}>{targetPage?.title || '无标题'}</span>
+            <span className={cn("underline underline-offset-4", isDarkMode ? "decoration-gray-700" : "decoration-gray-300")}>{targetPage?.title}</span>
           </div>
         );
       case 'table':
@@ -560,7 +629,7 @@ export const BlockItem: React.FC<BlockItemProps> = ({ block, pageId, index }) =>
       ref={setNodeRef}
       style={style}
       className="group relative flex items-start w-full mb-1 cursor-text min-h-[1.5em]"
-      onClick={handleClick}
+      onMouseDown={handleMouseDown}
     >
       <div className={cn("absolute -left-2 -translate-x-full flex items-center opacity-0 group-hover:opacity-100 transition-opacity pr-2", controlTopClass)}>
         <div 

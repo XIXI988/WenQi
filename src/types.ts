@@ -14,7 +14,8 @@ export type BlockType =
   | 'image'
   | 'page' 
   | 'table' 
-  | 'divider';
+  | 'divider'
+  | 'link';
 
 export interface Block {
   id: string;

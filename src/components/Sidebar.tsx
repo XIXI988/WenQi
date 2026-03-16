@@ -40,6 +40,49 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
   } = useApp();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(240);
+  const [isResizing, setIsResizing] = useState(false);
+
+  // Load width from localStorage
+  useEffect(() => {
+    const savedWidth = localStorage.getItem('wenqi_sidebar_width');
+    if (savedWidth) {
+      setSidebarWidth(parseInt(savedWidth, 10));
+    }
+  }, []);
+
+  const startResizing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  const stopResizing = () => {
+    setIsResizing(false);
+    localStorage.setItem('wenqi_sidebar_width', sidebarWidth.toString());
+  };
+
+  const resize = (e: MouseEvent) => {
+    if (isResizing) {
+      const newWidth = e.clientX;
+      if (newWidth >= 160 && newWidth <= 480) {
+        setSidebarWidth(newWidth);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener('mousemove', resize);
+      window.addEventListener('mouseup', stopResizing);
+    } else {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+    }
+    return () => {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+    };
+  }, [isResizing, sidebarWidth]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -112,7 +155,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
             )}
           </div>
           <span className="mr-2">{page.icon}</span>
-          <span className="truncate flex-1">{page.title || '无标题'}</span>
+          <span className="truncate flex-1">{page.title}</span>
           <div className="hidden group-hover:flex items-center space-x-1">
             <button 
               className="p-1 notion-hover rounded-sm"
@@ -163,8 +206,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
       <motion.aside
         initial={false}
         animate={{ 
-          x: isOpen ? 0 : -240,
-          width: isOpen ? 240 : 0
+          x: isOpen ? 0 : -sidebarWidth,
+          width: isOpen ? sidebarWidth : 0
+        }}
+        transition={{ 
+          type: 'spring', 
+          stiffness: 300, 
+          damping: 30,
+          width: { duration: isResizing ? 0 : 0.2 },
+          x: { duration: 0.2 }
         }}
         className={cn(
           "fixed md:relative z-50 h-full border-r flex flex-col overflow-hidden transition-colors duration-200",
@@ -172,6 +222,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
           !isOpen && "md:hidden"
         )}
       >
+        {/* Resize Handle */}
+        {isOpen && (
+          <div 
+            onMouseDown={startResizing}
+            className={cn(
+              "absolute right-0 top-0 bottom-0 w-1 cursor-col-resize z-50 transition-colors group/resizer",
+              isResizing ? (isDarkMode ? "bg-blue-500" : "bg-blue-400") : "hover:bg-gray-300 dark:hover:bg-gray-700"
+            )}
+          >
+            <div className={cn(
+              "absolute right-0 top-0 bottom-0 w-[2px] opacity-0 group-hover/resizer:opacity-100 transition-opacity",
+              isDarkMode ? "bg-gray-700" : "bg-gray-300"
+            )} />
+          </div>
+        )}
+        
         {/* Sidebar Header */}
         <div className="p-4 flex items-center justify-between group">
           <div className="flex items-center space-x-2 font-semibold text-sm">
