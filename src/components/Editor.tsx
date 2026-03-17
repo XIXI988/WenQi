@@ -17,8 +17,19 @@ import {
 } from '@dnd-kit/sortable';
 import { BlockItem } from './BlockItem';
 import { motion, AnimatePresence } from 'motion/react';
-import { Smile, Image as ImageIcon, MoreHorizontal, Download, Upload } from 'lucide-react';
+import { 
+  Smile, 
+  Image as ImageIcon, 
+  MoreHorizontal, 
+  Download, 
+  Upload,
+  FileJson,
+  HelpCircle,
+  Settings,
+  ChevronRight
+} from 'lucide-react';
 import { EmojiPicker } from './EmojiPicker';
+import { HelpModal } from './HelpModal';
 import { cn } from '../utils';
 import { serializePageToMarkdown, parseMarkdownToBlocks } from '../services/markdownService';
 import { useToast, ToastContainer } from './Toast';
@@ -28,8 +39,22 @@ interface EditorProps {
 }
 
 export const Editor: React.FC<EditorProps> = ({ isSidebarOpen = true }) => {
-  const { data, currentPageId, updatePage, moveBlock, setCurrentPageId, addBlock, focusedBlockId, setFocusedBlockId, isDarkMode } = useApp();
+  const { 
+    data, 
+    currentPageId, 
+    updatePage, 
+    moveBlock, 
+    setCurrentPageId, 
+    addBlock, 
+    focusedBlockId, 
+    setFocusedBlockId, 
+    isDarkMode,
+    exportData,
+    importData
+  } = useApp();
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
   const [emojiPickerPos, setEmojiPickerPos] = useState({ top: 0, left: 0 });
   const { toasts, showToast } = useToast();
 
@@ -71,6 +96,29 @@ export const Editor: React.FC<EditorProps> = ({ isSidebarOpen = true }) => {
       const { title, blocks } = parseMarkdownToBlocks(content);
       updatePage(page.id, { title, blocks });
       showToast('导入成功', 'success');
+    };
+    reader.readAsText(file);
+  };
+
+  const handleJsonExport = () => {
+    const dataStr = exportData();
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `wenqi_backup_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    showToast('JSON 备份导出成功', 'success');
+  };
+
+  const handleJsonImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const content = ev.target?.result as string;
+      importData(content);
+      showToast('JSON 备份导入成功', 'success');
     };
     reader.readAsText(file);
   };
@@ -150,24 +198,87 @@ export const Editor: React.FC<EditorProps> = ({ isSidebarOpen = true }) => {
           ))}
         </div>
         <div className="flex items-center space-x-2">
-          <button 
-            className="flex items-center space-x-1 px-2 py-1 notion-hover rounded-md opacity-60 text-xs"
-            onClick={handleExport}
-            title="导出为 .md 文件"
-          >
-            <Download size={14} />
-            <span>导出 Markdown</span>
-          </button>
-          <label className="flex items-center space-x-1 px-2 py-1 notion-hover rounded-md opacity-60 text-xs cursor-pointer" title="导入 .md 文件">
-            <Upload size={14} />
-            <span>导入 Markdown</span>
-            <input type="file" accept=".md" className="hidden" onChange={handleImport} />
-          </label>
-          <button className="p-1.5 notion-hover rounded-md opacity-40">
-            <MoreHorizontal size={18} />
-          </button>
+          <div className="relative">
+            <button 
+              className={cn(
+                "p-1.5 notion-hover rounded-md transition-opacity",
+                showMoreMenu ? "opacity-100 bg-gray-500/10" : "opacity-40"
+              )}
+              onClick={() => setShowMoreMenu(!showMoreMenu)}
+              title="更多选项"
+            >
+              <MoreHorizontal size={18} />
+            </button>
+
+            <AnimatePresence>
+              {showMoreMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowMoreMenu(false)} />
+                  <motion.div
+                    initial={{ opacity: 0, y: 5, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 5, scale: 0.95 }}
+                    className={cn(
+                      "absolute right-0 top-full mt-2 w-56 rounded-lg shadow-xl border z-50 py-1.5 overflow-hidden",
+                      isDarkMode ? "bg-[#252525] border-gray-700" : "bg-white border-gray-200"
+                    )}
+                  >
+                    <div className="px-3 py-1.5 text-[10px] font-bold opacity-40 uppercase tracking-wider">
+                      数据管理
+                    </div>
+                    <button 
+                      onClick={() => { handleJsonExport(); setShowMoreMenu(false); }}
+                      className="w-full flex items-center space-x-2 px-3 py-2 text-sm notion-hover text-left"
+                    >
+                      <Download size={14} className="opacity-60" />
+                      <span>导出 JSON 备份</span>
+                    </button>
+                    <label className="w-full flex items-center space-x-2 px-3 py-2 text-sm notion-hover cursor-pointer">
+                      <Upload size={14} className="opacity-60" />
+                      <span>导入 JSON 备份</span>
+                      <input type="file" className="hidden" accept=".json" onChange={(e) => { handleJsonImport(e); setShowMoreMenu(false); }} />
+                    </label>
+
+                    <div className="h-[1px] my-1.5 bg-gray-500/10" />
+                    
+                    <div className="px-3 py-1.5 text-[10px] font-bold opacity-40 uppercase tracking-wider">
+                      当前页面
+                    </div>
+                    <button 
+                      onClick={() => { handleExport(); setShowMoreMenu(false); }}
+                      className="w-full flex items-center space-x-2 px-3 py-2 text-sm notion-hover text-left"
+                    >
+                      <FileJson size={14} className="opacity-60" />
+                      <span>导出 Markdown</span>
+                    </button>
+                    <label className="w-full flex items-center space-x-2 px-3 py-2 text-sm notion-hover cursor-pointer">
+                      <Settings size={14} className="opacity-60" />
+                      <span>导入 Markdown</span>
+                      <input type="file" className="hidden" accept=".md" onChange={(e) => { handleImport(e); setShowMoreMenu(false); }} />
+                    </label>
+
+                    <div className="h-[1px] my-1.5 bg-gray-500/10" />
+
+                    <button 
+                      onClick={() => { setShowHelpModal(true); setShowMoreMenu(false); }}
+                      className="w-full flex items-center space-x-2 px-3 py-2 text-sm notion-hover text-left"
+                    >
+                      <HelpCircle size={14} className="opacity-60" />
+                      <span>快捷键与 Markdown 指南</span>
+                    </button>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
+
+      <HelpModal 
+        isOpen={showHelpModal} 
+        onClose={() => setShowHelpModal(false)} 
+        isDarkMode={isDarkMode} 
+      />
 
       <ToastContainer toasts={toasts} />
 

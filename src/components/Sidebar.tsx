@@ -302,22 +302,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
 
         {/* Sidebar Footer */}
         <div className={cn(
-          "p-2 border-t space-y-1 transition-colors",
+          "p-2 border-t flex items-center justify-center transition-colors",
           isDarkMode ? "border-gray-800" : "border-[#e9e9e7]"
         )}>
-          <button 
-            onClick={handleExport}
-            className="w-full flex items-center space-x-2 px-3 py-2 text-sm notion-hover rounded-md text-inherit opacity-70 hover:opacity-100"
-            title="导出所有页面为 JSON 备份"
-          >
-            <Download size={16} />
-            <span>导出 JSON 备份</span>
-          </button>
-          <label className="w-full flex items-center space-x-2 px-3 py-2 text-sm notion-hover rounded-md text-inherit opacity-70 hover:opacity-100 cursor-pointer" title="导入 JSON 备份文件">
-            <Upload size={16} />
-            <span>导入 JSON 备份</span>
-            <input type="file" className="hidden" accept=".json" onChange={handleImport} />
-          </label>
+          <span className="text-[10px] opacity-30">文栖 v1.0.0</span>
         </div>
       </motion.aside>
     </>

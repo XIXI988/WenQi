@@ -14,16 +14,27 @@ function MainLayout() {
   // Global shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Undo: Ctrl/Cmd + Z
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        // Only undo if not in an input that handles its own undo
-        // But for this app, we want to undo our global state
         e.preventDefault();
         undo();
+      }
+      
+      // Toggle Dark Mode: Ctrl/Cmd + Shift + L
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        toggleDarkMode();
+      }
+
+      // Toggle Sidebar: Ctrl/Cmd + \
+      if ((e.ctrlKey || e.metaKey) && e.key === '\\') {
+        e.preventDefault();
+        setIsSidebarOpen(prev => !prev);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [undo]);
+  }, [undo, toggleDarkMode]);
 
   // Listen for window resize to handle sidebar
   useEffect(() => {
